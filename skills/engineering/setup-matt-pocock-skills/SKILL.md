@@ -198,5 +198,8 @@ Test framework: <xUnit | NUnit | MSTest | Jest | other>
 - Don't overwrite user edits to the surrounding sections.
 - Never write secrets (PAT tokens, passwords) into any committed file. Always
   reference environment variables by name only (e.g. `$JIRA_PAT`).
+- Never read or display the contents of .env
+- If .env is accidentally staged for commit, warn the user immediately and
+  unstage it with `git reset HEAD .env`
 - If the repo has no test project yet, write a placeholder test command and note
   that it should be updated when a test project is added.
