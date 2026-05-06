@@ -136,6 +136,28 @@ option before asking for confirmation.
 
 ---
 
+### Section E — Environment variables
+
+**Explainer:** The Jira-connected skills (grill-with-docs, to-prd, to-issues)
+call the Jira REST API using credentials stored as environment variables. These
+must never be committed to the repo — they live in a local .env file that is
+gitignored, or in your shell profile.
+
+Check whether a .env file already exists at the repo root:
+- If it exists, check whether JIRA_URL, JIRA_EMAIL, and JIRA_PAT are already
+  present. If they are, confirm with the user and skip.
+- If it doesn't exist, create it with the three variables below.
+
+Ask the user for:
+1. Their Jira base URL (e.g. https://smartinsider.atlassian.net)
+2. Their Jira email address
+3. Their Jira API token (remind them to generate one at
+   https://id.atlassian.com/manage-profile/security/api-tokens if they don't
+   have one)
+
+Write the .env file:
+---
+
 ### Step 2 — Write
 
 Once all four sections are confirmed, write the following:
