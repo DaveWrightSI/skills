@@ -1,121 +1,180 @@
+# setup-matt-pocock-skills
+
+Sets up an `## Agent skills` block in AGENTS.md/CLAUDE.md and `docs/agents/` so
+the engineering skills know this repo's issue tracker (GitHub, Jira, or local
+markdown), triage label vocabulary, and domain doc layout.
+
+Run before first use of `to-issues`, `to-prd`, `triage`, `diagnose`, `tdd`,
+`improve-codebase-architecture`, or `zoom-out` — or if those skills appear to be
+missing context about the issue tracker, triage labels, or domain docs.
+
 ---
-name: setup-matt-pocock-skills
-description: Sets up an `## Agent skills` block in AGENTS.md/CLAUDE.md and `docs/agents/` so the engineering skills know this repo's issue tracker (GitHub or local markdown), triage label vocabulary, and domain doc layout. Run before first use of `to-issues`, `to-prd`, `triage`, `diagnose`, `tdd`, `improve-codebase-architecture`, or `zoom-out` — or if those skills appear to be missing context about the issue tracker, triage labels, or domain docs.
-disable-model-invocation: true
----
 
-# Setup Matt Pocock's Skills
+## What this skill configures
 
-Scaffold the per-repo configuration that the engineering skills assume:
-
-- **Issue tracker** — where issues live (GitHub by default; local markdown is also supported out of the box)
+- **Issue tracker** — where issues live (Jira by default for Smart Insider repos;
+  GitHub and local markdown also supported)
 - **Triage labels** — the strings used for the five canonical triage roles
-- **Domain docs** — where `CONTEXT.md` and ADRs live, and the consumer rules for reading them
+- **Domain docs** — where CONTEXT.md and ADRs live, and the consumer rules for
+  reading them
+- **Test runner** — how to run tests in this repo (`dotnet test` for C# projects)
 
-This is a prompt-driven skill, not a deterministic script. Explore, present what you found, confirm with the user, then write.
+---
 
-## Process
+## Instructions
 
-### 1. Explore
+This is a prompt-driven skill, not a deterministic script. Explore, present what
+you found, confirm with the user, then write.
 
-Look at the current repo to understand its starting state. Read whatever exists; don't assume:
+### Step 1 — Explore
 
-- `git remote -v` and `.git/config` — is this a GitHub repo? Which one?
-- `AGENTS.md` and `CLAUDE.md` at the repo root — does either exist? Is there already an `## Agent skills` section in either?
-- `CONTEXT.md` and `CONTEXT-MAP.md` at the repo root
-- `docs/adr/` and any `src/*/docs/adr/` directories
-- `docs/agents/` — does this skill's prior output already exist?
-- `.scratch/` — sign that a local-markdown issue tracker convention is already in use
+Look at the current repo to understand its starting state:
 
-### 2. Present findings and ask
+- AGENTS.md and CLAUDE.md at the repo root — does either exist? Is there already
+  an `## Agent skills` section in either?
+- `docs/agents/` — does it exist? What files are in it?
+- Project file — is there a `.csproj`, `.sln`, `package.json`, or other build
+  descriptor? What language/stack is this repo?
+- Test projects — is there an `*.Tests.csproj` or similar? What test framework
+  (xUnit, NUnit, MSTest)?
 
-Summarise what's present and what's missing. Then walk the user through the three decisions **one at a time** — present a section, get the user's answer, then move to the next. Don't dump all three at once.
+Summarise what's present and what's missing. Then walk the user through the four
+decisions one at a time — present a section, get the user's answer, then move to
+the next. Don't dump all four at once. Assume the user does not know what these
+terms mean.
 
-Assume the user does not know what these terms mean. Each section starts with a short explainer (what it is, why these skills need it, what changes if they pick differently). Then show the choices and the default.
+Each section starts with a short explainer (what it is, why these skills need it,
+what changes if they pick differently). Then show the choices and the default.
 
-**Section A — Issue tracker.**
+---
 
-> Explainer: The "issue tracker" is where issues live for this repo. Skills like `to-issues`, `triage`, `to-prd`, and `qa` read from and write to it — they need to know whether to call `gh issue create`, write a markdown file under `.scratch/`, or follow some other workflow you describe. Pick the place you actually track work for this repo.
+### Section A — Issue tracker
 
-Default posture: these skills were designed for GitHub. If a `git remote` points at GitHub, propose that. If a `git remote` points at GitLab (`gitlab.com` or a self-hosted host), propose GitLab. Otherwise (or if the user prefers), offer:
+**Explainer:** The "issue tracker" is where issues live for this repo. Skills like
+`to-issues`, `triage`, `to-prd`, and `qa` read from and write to it — they need
+to know whether to call the Jira REST API, call `gh issue create`, write a
+markdown file under `.scratch/`, or follow some other workflow. Pick the place you
+actually track work for this repo.
 
-- **GitHub** — issues live in the repo's GitHub Issues (uses the `gh` CLI)
-- **GitLab** — issues live in the repo's GitLab Issues (uses the [`glab`](https://gitlab.com/gitlab-org/cli) CLI)
-- **Local markdown** — issues live as files under `.scratch/<feature>/` in this repo (good for solo projects or repos without a remote)
-- **Other** (Jira, Linear, etc.) — ask the user to describe the workflow in one paragraph; the skill will record it as freeform prose
+**Choices:**
 
-**Section B — Triage label vocabulary.**
+1. **Jira** *(default for Smart Insider repos)* — issues are created and updated
+   via the Jira REST API. Requires `JIRA_URL`, `JIRA_EMAIL`, and `JIRA_PAT`
+   environment variables. Read the bundled `issue-tracker-jira.md` for the full
+   config block to write.
 
-> Explainer: When the `triage` skill processes an incoming issue, it moves it through a state machine — needs evaluation, waiting on reporter, ready for an AFK agent to pick up, ready for a human, or won't fix. To do that, it needs to apply labels (or the equivalent in your issue tracker) that match strings *you've actually configured*. If your repo already uses different label names (e.g. `bug:triage` instead of `needs-triage`), map them here so the skill applies the right ones instead of creating duplicates.
+2. **GitHub Issues** — issues live in this repo's GitHub Issues tab. Requires the
+   `gh` CLI to be authenticated. Read the bundled `issue-tracker-github.md` for
+   the full config block to write.
 
-The five canonical roles:
+3. **Local files** — issues are markdown files under `.scratch/issues/`. No
+   external credentials needed. Good for repos not yet connected to a tracker.
+   Read the bundled `issue-tracker-local.md` for the full config block to write.
 
-- `needs-triage` — maintainer needs to evaluate
-- `needs-info` — waiting on reporter
-- `ready-for-agent` — fully specified, AFK-ready (an agent can pick it up with no human context)
-- `ready-for-human` — needs human implementation
-- `wontfix` — will not be actioned
+4. **Other** — ask the user to describe the tracker and write a custom config
+   block.
 
-Default: each role's string equals its name. Ask the user if they want to override any. If their issue tracker has no existing labels, the defaults are fine.
+---
 
-**Section C — Domain docs.**
+### Section B — Triage labels
 
-> Explainer: Some skills (`improve-codebase-architecture`, `diagnose`, `tdd`) read a `CONTEXT.md` file to learn the project's domain language, and `docs/adr/` for past architectural decisions. They need to know whether the repo has one global context or multiple (e.g. a monorepo with separate frontend/backend contexts) so they look in the right place.
+**Explainer:** These are the label strings your issue tracker actually uses for the
+five canonical triage roles. The `/triage` skill applies these labels — if the
+strings are wrong the labels land on the wrong issues.
 
-Confirm the layout:
+The five canonical roles and their default Jira equivalents:
 
-- **Single-context** — one `CONTEXT.md` + `docs/adr/` at the repo root. Most repos are this.
-- **Multi-context** — `CONTEXT-MAP.md` at the root pointing to per-context `CONTEXT.md` files (typically a monorepo).
+| Role | Jira default | GitHub default |
+|---|---|---|
+| needs-triage | `Needs Triage` | `needs-triage` |
+| needs-info | `Needs Info` | `needs-info` |
+| ready-for-agent | `Ready for Agent` | `ready-for-agent` |
+| ready-for-human | `Ready for Human` | `ready-for-human` |
+| wontfix | `Won't Fix` | `wontfix` |
 
-### 3. Confirm and edit
+Ask the user to confirm or override each label string for their chosen tracker.
+Read the bundled `triage-labels.md` for the file format to write to
+`docs/agents/triage-labels.md`.
 
-Show the user a draft of:
+---
 
-- The `## Agent skills` block to add to whichever of `CLAUDE.md` / `AGENTS.md` is being edited (see step 4 for selection rules)
-- The contents of `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md`, `docs/agents/domain.md`
+### Section C — Domain docs
 
-Let them edit before writing.
+**Explainer:** A shared language document (`CONTEXT.md`) and Architecture Decision
+Records (`docs/adr/`) help the agent use the right terminology for this codebase
+and respect past decisions. This section tells the agent where those files live
+and how to use them.
 
-### 4. Write
+Ask:
+- Where does CONTEXT.md live? (default: repo root)
+- Where do ADRs live? (default: `docs/adr/`)
 
-**Pick the file to edit:**
+Read the bundled `domain.md` for the file format to write to
+`docs/agents/domain.md`.
 
-- If `CLAUDE.md` exists, edit it.
-- Else if `AGENTS.md` exists, edit it.
-- If neither exists, ask the user which one to create — don't pick for them.
+---
 
-Never create `AGENTS.md` when `CLAUDE.md` already exists (or vice versa) — always edit the one that's already there.
+### Section D — Test runner
 
-If an `## Agent skills` block already exists in the chosen file, update its contents in-place rather than appending a duplicate. Don't overwrite user edits to the surrounding sections.
+**Explainer:** The `/tdd` skill runs tests in a red-green-refactor loop. It needs
+to know how to invoke tests in this repo so it can verify each change compiles
+and passes.
 
-The block:
+**Choices:**
+
+1. **dotnet test** *(default for C# repos)* — runs all test projects in the
+   solution. If a specific test project exists, use
+   `dotnet test path/to/Project.Tests.csproj`. Write the test command to the
+   Agent skills block.
+
+2. **npm test / vitest / jest** — for TypeScript/JavaScript repos.
+
+3. **Other** — ask the user to provide the exact command.
+
+Detect the stack from the files found in Step 1 and pre-select the most likely
+option before asking for confirmation.
+
+---
+
+### Step 2 — Write
+
+Once all four sections are confirmed, write the following:
+
+**In AGENTS.md or CLAUDE.md** (edit the one that already exists; create
+CLAUDE.md if neither exists — never create both):
 
 ```markdown
 ## Agent skills
 
 ### Issue tracker
-
-[one-line summary of where issues are tracked]. See `docs/agents/issue-tracker.md`.
+<content from the relevant issue-tracker-*.md, filled in with user's choices>
 
 ### Triage labels
-
-[one-line summary of the label vocabulary]. See `docs/agents/triage-labels.md`.
+<content from triage-labels.md, filled in with user's label strings>
 
 ### Domain docs
+<content from domain.md, filled in with user's paths>
 
-[one-line summary of layout — "single-context" or "multi-context"]. See `docs/agents/domain.md`.
+### Test runner
+Test command: `<command confirmed in Section D>`
+Test framework: <xUnit | NUnit | MSTest | Jest | other>
 ```
 
-Then write the three docs files using the seed templates in this skill folder as a starting point:
+**In docs/agents/:**
+- `issue-tracker.md` — copy of the issue tracker config block
+- `triage-labels.md` — the five role → label-string mappings
+- `domain.md` — domain doc locations and consumer rules
 
-- [issue-tracker-github.md](./issue-tracker-github.md) — GitHub issue tracker
-- [issue-tracker-gitlab.md](./issue-tracker-gitlab.md) — GitLab issue tracker
-- [issue-tracker-local.md](./issue-tracker-local.md) — local-markdown issue tracker
-- [triage-labels.md](./triage-labels.md) — label mapping
-- [domain.md](./domain.md) — domain doc consumer rules + layout
+---
 
-For "other" issue trackers, write `docs/agents/issue-tracker.md` from scratch using the user's description.
+## Guardrails
 
-### 5. Done
-
-Tell the user the setup is complete and which engineering skills will now read from these files. Mention they can edit `docs/agents/*.md` directly later — re-running this skill is only necessary if they want to switch issue trackers or restart from scratch.
+- Never create AGENTS.md when CLAUDE.md already exists (or vice versa) — always
+  edit the one that's already there.
+- If an `## Agent skills` block already exists in the chosen file, update its
+  contents in-place rather than appending a duplicate.
+- Don't overwrite user edits to the surrounding sections.
+- Never write secrets (PAT tokens, passwords) into any committed file. Always
+  reference environment variables by name only (e.g. `$JIRA_PAT`).
+- If the repo has no test project yet, write a placeholder test command and note
+  that it should be updated when a test project is added.
