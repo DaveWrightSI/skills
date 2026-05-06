@@ -18,27 +18,10 @@ the PRD rather than asking before writing.
 
 ### Step 1 — Gather context
 
-Collect all available inputs before writing anything:
-
 **From the conversation:**
 - What the user wants to build or change
 - Any constraints, preferences, or decisions already made
 - Any existing Jira ticket key the user has referenced (e.g. `WSCR-123`)
-
-**From Jira (if a ticket key was provided):**
-
-Fetch the ticket and extract its description, acceptance criteria, and comments:
-
-```bash
-curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
-  "$JIRA_URL/rest/api/3/issue/<TICKET_KEY>" \
-  -H "Accept: application/json"
-```
-
-Read the full ticket body. Use its language, acceptance criteria, and any
-decisions recorded in comments as additional context for the PRD. If the ticket
-contradicts the conversation, surface the conflict as an open question rather
-than silently choosing one.
 
 **From the codebase:**
 - Explore the repo to understand the current state if you haven't already
