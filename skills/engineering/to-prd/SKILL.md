@@ -1,106 +1,88 @@
+---
+name: to-prd
+description: Turn the current conversation context into a PRD and publish it as a Story in Jira. Use when user wants to create a PRD from the current context, formalise a conversation into a spec, or document a feature before breaking it into issues.
+---
+
 # to-prd
 
-Turn the current conversation context into a PRD and publish it to Jira.
+This skill takes the current conversation context and codebase understanding and produces a PRD. Do NOT interview the user — just synthesize what you already know. If something is genuinely ambiguous, note it in `Further Notes` rather than asking before writing.
 
-Use when the user wants to create a PRD from the current context, formalise a
-conversation into a spec, or document a feature before breaking it into issues.
+The issue tracker and triage label vocabulary should have been provided to you — run `/setup-matt-pocock-skills` if not.
 
-The issue tracker and triage label vocabulary should have been provided to you —
-run `/setup-matt-pocock-skills` if not.
+## Process
 
----
+1. **Explore the repo** to understand the current state of the codebase, if you haven't already. Use the project's domain glossary vocabulary throughout the PRD, and respect any ADRs in the area you're touching.
 
-## Instructions
+2. **Sketch out the major modules** you will need to build or modify to complete the implementation. Actively look for opportunities to extract deep modules that can be tested in isolation.
 
-Do NOT interview the user. Synthesize what you already know from the conversation
-and codebase. If something is genuinely ambiguous, note it as an open question in
-the PRD rather than asking before writing.
+   A deep module (as opposed to a shallow module) is one which encapsulates a lot of functionality in a simple, testable interface which rarely changes.
 
-### Step 1 — Gather context
+   Check with the user that these modules match their expectations. Check with the user which modules they want tests written for.
 
-**From the conversation:**
-- What the user wants to build or change
-- Any constraints, preferences, or decisions already made
-- Any existing Jira ticket key the user has referenced (e.g. `WSCR-123`)
+3. **Write the PRD** using the template below.
 
-**From the codebase:**
-- Explore the repo to understand the current state if you haven't already
-- Read `CONTEXT.md` for the project's domain glossary — use its vocabulary
-  throughout the PRD
-- Read any ADRs under `docs/adr/` that touch the area being changed
-- Identify the modules that will need to change
+4. **Publish to Jira** as a Story (see "Publishing to Jira" below). Apply the `ready-for-agent` triage label — no need for additional triage.
 
-### Step 2 — Write the PRD
+<prd-template>
 
-Use the template below. Use the project's domain glossary throughout — never
-invent synonyms for established terms. Respect ADRs in the area you're touching.
+## Problem Statement
 
-Sketch out the major modules you will need to build or modify. Actively look for
-opportunities to extract deep modules — ones that encapsulate a lot of
-functionality behind a simple, testable interface that rarely changes.
+The problem that the user is facing, from the user's perspective.
 
----
+## Solution
 
-## PRD template
+The solution to the problem, from the user's perspective.
 
-```markdown
-# <Feature name in domain vocabulary>
+## User Stories
 
-## Summary
-One paragraph. What this feature does and why it exists. Written for a developer
-who hasn't seen the conversation.
+A LONG, numbered list of user stories. Each user story should be in the format of:
 
-## Related ticket
-<Jira ticket key and URL if provided, e.g. WSCR-123 — https://smartinsider.atlassian.net/browse/WSCR-123>
+1. As an <actor>, I want a <feature>, so that <benefit>
 
-## Context
-What currently exists. What gap or problem this addresses. Reference any relevant
-ADRs and why they constrain the approach.
+<user-story-example>
+1. As a mobile bank customer, I want to see balance on my accounts, so that I can make better informed decisions about my spending
+</user-story-example>
 
-## Scope
+This list of user stories should be extremely extensive and cover all aspects of the feature.
 
-### In scope
-- Bullet list of what this PRD covers
+## Implementation Decisions
 
-### Out of scope
-- Explicit list of things that are deliberately NOT included in this PRD
+A list of implementation decisions that were made. This can include:
 
-## Modules
+- The modules (C# / VB.NET classes, services, interfaces) that will be built/modified
+- The interfaces of those modules that will be modified
+- Technical clarifications from the developer
+- Architectural decisions
+- MySQL schema changes
+- API contracts
+- Specific interactions
+- Azure DevOps pipeline considerations
 
-List the modules (classes, services, interfaces) to build or modify:
+Do NOT include specific file paths or code snippets. They may end up being outdated very quickly.
 
-| Module | Action | Notes |
-|---|---|---|
-| `IAnnouncementParser` | Create | New interface, extracted for testability |
-| `AnnouncementService` | Modify | Inject parser via constructor |
-| `AnnouncementController` | Modify | Minor — endpoint already exists |
+Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it within the relevant decision and note briefly that it came from a prototype. Trim to the decision-rich parts — not a working demo, just the important bits.
 
-Mark any new module as a **deep module opportunity** if it encapsulates
-significant complexity behind a simple interface.
+## Testing Decisions
 
-## Acceptance criteria
-A numbered list of verifiable statements. Each criterion should be independently
-testable by `/tdd`.
+A list of testing decisions that were made. Include:
 
-1. Given X, when Y, then Z
-2. ...
+- A description of what makes a good test (only test external behavior, not implementation details)
+- Which modules will be tested
+- Prior art for the tests (i.e. similar types of tests in the codebase — typically xUnit/NUnit/MSTest under `*.Tests.csproj` or `*.Tests.vbproj`)
 
-## Open questions
-Any genuine ambiguities that need a decision before or during implementation.
-If none, write "None."
+## Out of Scope
 
-## Implementation notes
-Optional. C#-specific patterns, NuGet packages, existing utilities to reuse,
-MySQL schema changes, or Azure DevOps pipeline considerations.
-```
+A description of the things that are out of scope for this PRD.
 
----
+## Further Notes
 
-### Step 3 — Publish to Jira
+Any further notes about the feature, including open questions and ambiguities that need a decision before or during implementation.
 
-Once the PRD is written, create a new Jira issue of type **Story** in the
-project's configured project key. Use ADF (Atlassian Document Format) for the
-description body.
+</prd-template>
+
+## Publishing to Jira
+
+Create a new Jira issue of type **Story** in the project's configured project key. Use ADF (Atlassian Document Format) for the description body.
 
 ```bash
 curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
@@ -111,6 +93,7 @@ curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
       "project": { "key": "<PROJECT_KEY>" },
       "summary": "<Feature name — matches PRD title>",
       "issuetype": { "name": "Story" },
+      "labels": ["ready-for-agent"],
       "description": {
         "type": "doc",
         "version": 1,
@@ -118,16 +101,25 @@ curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
           {
             "type": "heading",
             "attrs": { "level": 2 },
-            "content": [{ "type": "text", "text": "Summary" }]
+            "content": [{ "type": "text", "text": "Problem Statement" }]
           },
           {
             "type": "paragraph",
-            "content": [{ "type": "text", "text": "<summary text>" }]
+            "content": [{ "type": "text", "text": "<problem text>" }]
           },
           {
             "type": "heading",
             "attrs": { "level": 2 },
-            "content": [{ "type": "text", "text": "Acceptance Criteria" }]
+            "content": [{ "type": "text", "text": "Solution" }]
+          },
+          {
+            "type": "paragraph",
+            "content": [{ "type": "text", "text": "<solution text>" }]
+          },
+          {
+            "type": "heading",
+            "attrs": { "level": 2 },
+            "content": [{ "type": "text", "text": "User Stories" }]
           },
           {
             "type": "orderedList",
@@ -137,7 +129,7 @@ curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
                 "content": [
                   {
                     "type": "paragraph",
-                    "content": [{ "type": "text", "text": "<criterion 1>" }]
+                    "content": [{ "type": "text", "text": "<story 1>" }]
                   }
                 ]
               }
@@ -149,13 +141,15 @@ curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
   }'
 ```
 
+Extend the `content` array with headings + paragraphs for `Implementation Decisions`, `Testing Decisions`, `Out of Scope`, and `Further Notes` in the same shape.
+
 After creating the issue, output:
+
 - The new Jira issue key (e.g. `WSCR-124`)
 - The full URL (e.g. `https://smartinsider.atlassian.net/browse/WSCR-124`)
 - A one-line summary of what was created
 
-If a source ticket key was provided, add a comment on the source ticket linking
-to the new PRD issue:
+If a source ticket key was referenced in the conversation, add a comment on the source ticket linking to the new PRD issue:
 
 ```bash
 curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
@@ -181,16 +175,10 @@ curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
   }'
 ```
 
----
-
 ## Guardrails
 
 - Never invent domain terminology — use only vocabulary from `CONTEXT.md`
-- Never mark a PRD issue as Done or In Progress — status changes are human
-  decisions
-- Never hardcode `$JIRA_EMAIL`, `$JIRA_PAT`, or `$JIRA_URL` — always reference
-  as environment variables
-- If the Jira project key is ambiguous (the repo could belong to WSCR or DT),
-  ask the user before creating the issue
-- The PRD describes the **what and why** — not a step-by-step implementation
-  plan. Implementation detail belongs in the child issues created by `/to-issues`
+- Never mark a PRD issue as Done or In Progress — status changes are human decisions
+- Never hardcode `$JIRA_EMAIL`, `$JIRA_PAT`, or `$JIRA_URL` — always reference as environment variables
+- If the Jira project key is ambiguous (the repo could belong to WSCR or DT), ask the user before creating the issue
+- The PRD describes the **what and why** — not a step-by-step implementation plan. Implementation detail belongs in the child issues created by `/to-issues`
