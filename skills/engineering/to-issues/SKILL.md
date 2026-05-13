@@ -71,7 +71,9 @@ Iterate until the user approves the breakdown. **Do not create any Jira issues u
 
 ### 5. Publish the issues to Jira
 
-For each approved slice, create a Jira **Sub-task** under the parent issue identified by `<PARENT_KEY>`. Publish in dependency order (blockers first) so you can reference real issue keys in the "Blocked by" field. These issues are considered ready for AFK agents, so publish them with the `ready-for-agent` label unless instructed otherwise.
+For each approved slice, create a Jira **Sub-task** under the parent issue identified by `<PARENT_KEY>`. Publish in dependency order (blockers first) so you can reference real issue keys in the "Blocked by" field.
+
+**Labelling rule:** apply `ready-for-agent` **only to AFK slices**. HITL slices wait on a human, so labelling them `ready-for-agent` would mislead any AFK agent that's pulling work via the standard `labels = "ready-for-agent"` JQL. HITL Sub-tasks should be created with no labels (or whatever HITL-specific label the project uses).
 
 **Issue type name varies by project.** The sub-task issue type is called `Sub-task` in company-managed Jira projects and `Subtask` in team-managed projects. Confirm the exact name for the parent's project once before the first create call — either via the MCP tool `getJiraIssueTypeMetaWithFields` or:
 
@@ -129,7 +131,7 @@ curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
       "summary": "<Slice title>",
       "issuetype": { "name": "Sub-task" },
       "parent": { "key": "<PARENT_KEY>" },
-      "labels": ["ready-for-agent"],
+      "labels": ["ready-for-agent"],  // AFK only — omit for HITL slices
       "description": {
         "type": "doc",
         "version": 1,
@@ -233,6 +235,7 @@ Do NOT close or modify any parent issue.
 - Never mark any issue as In Progress or Done — status changes are human decisions
 - The parent issue must NOT be edited beyond the single summary comment in step 6. No description rewrite, no label change, no status change.
 - Sub-tasks inherit the parent's project — do not pass a different `project.key`.
+- Never apply `ready-for-agent` to HITL slices — that label means "an AFK agent can grab this", and an agent grabbing a HITL slice will get stuck or do the wrong thing.
 - Verify the sub-task issue type name (`Sub-task` vs `Subtask`) for the parent's project before the first create call; ask the user if neither matches.
 - Never hardcode `$JIRA_EMAIL`, `$JIRA_PAT`, or `$JIRA_URL` — always environment variables
 - If the project key is ambiguous (WSCR vs DT), ask before creating
