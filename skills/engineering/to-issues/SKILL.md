@@ -1,11 +1,15 @@
 ---
 name: to-issues
-description: Break a plan, spec, or PRD into independently-grabbable Jira issues using tracer-bullet vertical slices. Use when user wants to convert a plan into issues, create implementation tickets, or break down a PRD into workable slices.
+description: Break a plan, spec, or PRD into independently-grabbable Jira sub-tasks under an existing parent issue, using tracer-bullet vertical slices. Use when user wants to convert a plan into issues, create implementation tickets, or break down a PRD into workable slices.
 ---
 
 # to-issues
 
-Break a plan into independently-grabbable Jira issues using vertical slices (tracer bullets).
+Break a plan into independently-grabbable Jira **sub-tasks** under an existing parent issue, using vertical slices (tracer bullets).
+
+**Primary flow:** invoke as `/to-issues <PARENT-KEY>` (e.g. `/to-issues DT-514`). All slices are created as sub-tasks of that parent issue — they appear inside the parent and inherit its project.
+
+**Fallback flow:** if no parent key is provided, create standalone Tasks in the project (the original behaviour). See step 5.
 
 The issue tracker and triage label vocabulary should have been provided to you — run `/setup-matt-pocock-skills` if not.
 
@@ -13,12 +17,20 @@ The issue tracker and triage label vocabulary should have been provided to you �
 
 ### 1. Gather context
 
-Work from whatever is already in the conversation context. If the user passes a Jira issue key as an argument (e.g. `WSCR-124`), fetch it and read its full body and comments before proceeding:
+Work from whatever is already in the conversation context. The parent Jira key passed as the skill argument identifies the issue under which all sub-tasks will be created. Fetch it and read its full body, attachments, and comments before proceeding — a PRD attached by `/to-prd` lives there as `Product Requirement Document.md`:
 
 ```bash
 curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
-  "$JIRA_URL/rest/api/3/issue/<ISSUE_KEY>?expand=renderedFields" \
+  "$JIRA_URL/rest/api/3/issue/<PARENT_KEY>?expand=renderedFields" \
   -H "Accept: application/json"
+```
+
+If a `Product Requirement Document.md` attachment is present, download and read it for the full spec before drafting slices:
+
+```bash
+# The issue JSON above contains `fields.attachment[]`. Find the entry whose
+# `filename` equals "Product Requirement Document.md" and fetch its `content` URL.
+curl -s -u "$JIRA_EMAIL:$JIRA_PAT" -L "<ATTACHMENT_CONTENT_URL>"
 ```
 
 ### 2. Explore the codebase (optional)
@@ -59,7 +71,17 @@ Iterate until the user approves the breakdown. **Do not create any Jira issues u
 
 ### 5. Publish the issues to Jira
 
-For each approved slice, create a Jira **Task** as a child of the parent PRD Story (if one was provided). Publish in dependency order (blockers first) so you can reference real issue keys in the "Blocked by" field. These issues are considered ready for AFK agents, so publish them with the `ready-for-agent` label unless instructed otherwise.
+For each approved slice, create a Jira **Sub-task** under the parent issue identified by `<PARENT_KEY>`. Publish in dependency order (blockers first) so you can reference real issue keys in the "Blocked by" field. These issues are considered ready for AFK agents, so publish them with the `ready-for-agent` label unless instructed otherwise.
+
+**Issue type name varies by project.** The sub-task issue type is called `Sub-task` in company-managed Jira projects and `Subtask` in team-managed projects. Confirm the exact name for the parent's project once before the first create call — either via the MCP tool `getJiraIssueTypeMetaWithFields` or:
+
+```bash
+curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
+  "$JIRA_URL/rest/api/3/issue/createmeta?projectKeys=<PROJECT_KEY>&expand=projects.issuetypes" \
+  -H "Accept: application/json"
+```
+
+If neither name matches what the project exposes, ask the user before proceeding.
 
 <issue-template>
 
@@ -95,7 +117,7 @@ Or "None - can start immediately" if no blockers.
 
 </issue-template>
 
-Use ADF for the description body:
+Use ADF for the description body. The sub-task inherits its project from the parent, but the `project.key` field is still required by the create endpoint — use the parent's project key.
 
 ```bash
 curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
@@ -105,8 +127,8 @@ curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
     "fields": {
       "project": { "key": "<PROJECT_KEY>" },
       "summary": "<Slice title>",
-      "issuetype": { "name": "Task" },
-      "parent": { "key": "<PARENT_PRD_KEY>" },
+      "issuetype": { "name": "Sub-task" },
+      "parent": { "key": "<PARENT_KEY>" },
       "labels": ["ready-for-agent"],
       "description": {
         "type": "doc",
@@ -161,7 +183,7 @@ curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
   }'
 ```
 
-If no parent PRD key was provided, create standalone Tasks in the project.
+If no parent key was provided, fall back to creating standalone **Task** issues in the project — set `issuetype.name` to `Task` and omit the `parent` field.
 
 If a slice depends on another slice, add a comment on the dependent issue after creation noting the dependency by key (e.g. `Depends on WSCR-125`).
 
@@ -177,7 +199,7 @@ After all issues are created, output a summary table:
 | 3 | WSCR-127 | Review parser output format with analyst | HITL | https://... |
 ```
 
-Then add a comment on the parent PRD issue (if one exists) listing all created child issue keys so the thread stays connected:
+Then add a comment on the parent issue listing all created sub-task keys so the thread stays connected. This summary comment is the only modification permitted on the parent — no description edits, no label changes, no status changes.
 
 ```bash
 curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
@@ -209,6 +231,9 @@ Do NOT close or modify any parent issue.
 - Never create issues without explicit user approval of the breakdown
 - Never create more than one issue per slice — if a slice feels too big, propose splitting it before creating anything
 - Never mark any issue as In Progress or Done — status changes are human decisions
+- The parent issue must NOT be edited beyond the single summary comment in step 6. No description rewrite, no label change, no status change.
+- Sub-tasks inherit the parent's project — do not pass a different `project.key`.
+- Verify the sub-task issue type name (`Sub-task` vs `Subtask`) for the parent's project before the first create call; ask the user if neither matches.
 - Never hardcode `$JIRA_EMAIL`, `$JIRA_PAT`, or `$JIRA_URL` — always environment variables
 - If the project key is ambiguous (WSCR vs DT), ask before creating
 - AFK issues should be genuinely self-contained — if an AFK issue actually requires a human decision buried inside it, reclassify it as HITL

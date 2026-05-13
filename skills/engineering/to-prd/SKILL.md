@@ -1,11 +1,15 @@
 ---
 name: to-prd
-description: Turn the current conversation context into a PRD and publish it as a Story in Jira. Use when user wants to create a PRD from the current context, formalise a conversation into a spec, or document a feature before breaking it into issues.
+description: Turn the current conversation context into a PRD and attach it to an existing Jira issue (or, with no key, publish it as a new Story). Use when user wants to create a PRD from the current context, formalise a conversation into a spec, or document a feature before breaking it into issues.
 ---
 
 # to-prd
 
 This skill takes the current conversation context and codebase understanding and produces a PRD. Do NOT interview the user — just synthesize what you already know. If something is genuinely ambiguous, note it in `Further Notes` rather than asking before writing.
+
+**Primary flow:** invoke as `/to-prd <PARENT-KEY>` (e.g. `/to-prd DT-514`). The PRD is rendered to Markdown and attached to that existing Jira issue as `Product Requirement Document.md`. The parent issue is NOT otherwise modified — no description rewrite, no comment, no status change.
+
+**Fallback flow:** if no parent key is provided, create a new Jira **Story** with the PRD as the description (the original behaviour). See "No parent key — create a new Story" below.
 
 The issue tracker and triage label vocabulary should have been provided to you — run `/setup-matt-pocock-skills` if not.
 
@@ -21,7 +25,7 @@ The issue tracker and triage label vocabulary should have been provided to you �
 
 3. **Write the PRD** using the template below.
 
-4. **Publish to Jira** as a Story (see "Publishing to Jira" below). Apply the `ready-for-agent` triage label — no need for additional triage.
+4. **Publish the PRD to Jira** (see "Publishing to Jira" below). With a parent key, attach as a Markdown file. With no parent key, create a new Story with the `ready-for-agent` label.
 
 <prd-template>
 
@@ -82,7 +86,66 @@ Any further notes about the feature, including open questions and ambiguities th
 
 ## Publishing to Jira
 
-Create a new Jira issue of type **Story** in the project's configured project key. Use ADF (Atlassian Document Format) for the description body.
+### With parent key — attach PRD as Markdown file (primary flow)
+
+When invoked as `/to-prd <PARENT-KEY>`, render the PRD body as Markdown, write it to a tempfile, and upload it as an attachment to the existing issue. The filename shown in Jira is taken from the upload — name it `Product Requirement Document.md`.
+
+```bash
+# 1. Render the PRD body to a tempfile. Use mktemp so the file lives in the
+#    OS temp dir and is not written into the working repo.
+TMPFILE="$(mktemp --suffix=.md)"
+
+cat > "$TMPFILE" <<'MD'
+# Product Requirement Document
+
+## Problem Statement
+<problem text>
+
+## Solution
+<solution text>
+
+## User Stories
+1. As a <actor>, I want a <feature>, so that <benefit>
+2. ...
+
+## Implementation Decisions
+- <decision 1>
+- <decision 2>
+
+## Testing Decisions
+- <decision 1>
+
+## Out of Scope
+- <item 1>
+
+## Further Notes
+- <note 1>
+MD
+
+# 2. Upload as an attachment. X-Atlassian-Token: no-check is required by Jira
+#    for the attachments endpoint. The ;filename= override controls the name
+#    that appears in the Jira UI, regardless of the tempfile's actual name.
+curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
+  -X POST \
+  -H "X-Atlassian-Token: no-check" \
+  -F "file=@$TMPFILE;filename=Product Requirement Document.md" \
+  "$JIRA_URL/rest/api/3/issue/<PARENT_KEY>/attachments"
+
+# 3. Clean up the tempfile.
+rm -f "$TMPFILE"
+```
+
+After upload, output:
+
+- The parent Jira issue key + URL (e.g. `DT-514` → `https://smartinsider.atlassian.net/browse/DT-514`)
+- The attachment filename (`Product Requirement Document.md`)
+- A one-line summary of what was attached
+
+Do NOT modify the parent issue's description, labels, status, or comments. The attachment is the entire output.
+
+### No parent key — create a new Story (fallback flow)
+
+If the user did not provide a parent key, fall back to creating a new Jira issue of type **Story** in the project's configured project key. Use ADF (Atlassian Document Format) for the description body.
 
 ```bash
 curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
@@ -179,6 +242,8 @@ curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
 
 - Never invent domain terminology — use only vocabulary from `CONTEXT.md`
 - Never mark a PRD issue as Done or In Progress — status changes are human decisions
+- In the primary (attach) flow, the parent issue must NOT be edited beyond adding the attachment. No description rewrite, no comment, no label change, no status change.
+- Always clean up the tempfile after upload (`rm -f "$TMPFILE"`) so PRD content does not linger on disk.
 - Never hardcode `$JIRA_EMAIL`, `$JIRA_PAT`, or `$JIRA_URL` — always reference as environment variables
 - If the Jira project key is ambiguous (the repo could belong to WSCR or DT), ask the user before creating the issue
 - The PRD describes the **what and why** — not a step-by-step implementation plan. Implementation detail belongs in the child issues created by `/to-issues`
