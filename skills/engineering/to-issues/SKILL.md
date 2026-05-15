@@ -73,9 +73,9 @@ Iterate until the user approves the breakdown. **Do not create any Jira issues u
 
 For each approved slice, create a Jira **Sub-task** under the parent issue identified by `<PARENT_KEY>`. Publish in dependency order (blockers first) so you can reference real issue keys in the "Blocked by" field.
 
-**Labelling rule:** apply `ready-for-agent` **only to AFK slices**. HITL slices wait on a human, so labelling them `ready-for-agent` would mislead any AFK agent that's pulling work via the standard `labels = "ready-for-agent"` JQL. HITL Sub-tasks should be created with no labels (or whatever HITL-specific label the project uses).
+**Labelling rule:** apply `ready-for-agent` (or the project's configured equivalent — see `docs/agents/triage-labels.md`) to **every sub-task**, regardless of HITL/AFK type. **Labels do not inherit from the parent in Jira** — they must be set explicitly in each create call. The HITL/AFK distinction lives in the issue body's `## Type` section, so consumers can still filter or branch on it, but the label is uniform across every sub-task so downstream queries see them all.
 
-**Issue type name varies by project.** The sub-task issue type is called `Sub-task` in company-managed Jira projects and `Subtask` in team-managed projects. Confirm the exact name for the parent's project once before the first create call — either via the MCP tool `getJiraIssueTypeMetaWithFields` or:
+**Issue type name varies by project.** The sub-task issue type is called `Sub-task` in company-managed Jira projects and `Subtask` in team-managed projects. Confirm the exact name for the parent's project once before the first create call — preferred via `mcp__atlassian__getJiraIssueTypeMetaWithFields`, fallback via:
 
 ```bash
 curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
@@ -121,6 +121,24 @@ Or "None - can start immediately" if no blockers.
 
 Use ADF for the description body. The sub-task inherits its project from the parent, but the `project.key` field is still required by the create endpoint — use the parent's project key.
 
+**Preferred — MCP tool.** Call `mcp__atlassian__createJiraIssue` with the `fields` object below. **The `labels` array is non-negotiable — include it on every call** (one label per sub-task, every sub-task, regardless of HITL/AFK):
+
+```json
+{
+  "cloudId": "<resolved via mcp__atlassian__getAccessibleAtlassianResources>",
+  "fields": {
+    "project":   { "key": "<PROJECT_KEY>" },
+    "summary":   "<Slice title>",
+    "issuetype": { "name": "Sub-task" },
+    "parent":    { "key": "<PARENT_KEY>" },
+    "labels":    ["ready-for-agent"],
+    "description": { "...": "ADF body — see template below" }
+  }
+}
+```
+
+**Fallback — bash curl** (only when the MCP atlassian server is unavailable):
+
 ```bash
 curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
   -H "Content-Type: application/json" \
@@ -131,7 +149,7 @@ curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
       "summary": "<Slice title>",
       "issuetype": { "name": "Sub-task" },
       "parent": { "key": "<PARENT_KEY>" },
-      "labels": ["ready-for-agent"],  // AFK only — omit for HITL slices
+      "labels": ["ready-for-agent"],
       "description": {
         "type": "doc",
         "version": 1,
@@ -187,7 +205,20 @@ curl -s -u "$JIRA_EMAIL:$JIRA_PAT" \
 
 If no parent key was provided, fall back to creating standalone **Task** issues in the project — set `issuetype.name` to `Task` and omit the `parent` field.
 
-If a slice depends on another slice, add a comment on the dependent issue after creation noting the dependency by key (e.g. `Depends on WSCR-125`).
+**Dependencies** — for each `Blocked by: X` line in a slice's body, create a real Jira **issue link of type `Blocks`** (not a comment). Comments are invisible to filtering and blocker queries; issue links show up in the Jira UI's link panel and via JQL like `issueLinkType = "is blocked by"`.
+
+Translate the template field directly with this fixed mapping — **do not invert it**:
+
+| In the slice body                | Role        | Payload field        |
+|----------------------------------|-------------|----------------------|
+| The key after `Blocked by:` (`X`)| **BLOCKER** | `outwardIssue.key`   |
+| This slice itself                | **BLOCKED** | `inwardIssue.key`    |
+
+So if WSCR-201's body says `Blocked by: WSCR-200`, the link is
+`type=Blocks, outwardIssue.key="WSCR-200", inwardIssue.key="WSCR-201"`.
+After creation, Jira's link panel on WSCR-201 must read *"is blocked by WSCR-200"* — if it reads the other way round, the payload was inverted.
+
+Preferred via `mcp__atlassian__createIssueLink`; the REST fallback, sanity-check snippet, and two PowerShell pitfalls (URL-encoded query strings; response-side direction being from the *other* end of the link) are documented in `docs/agents/issue-tracker.md`. One link per dependency — and never link a slice to its parent with `Blocks` (parent-child is automatic for sub-tasks).
 
 ### 6. Output a summary
 
@@ -235,7 +266,8 @@ Do NOT close or modify any parent issue.
 - Never mark any issue as In Progress or Done — status changes are human decisions
 - The parent issue must NOT be edited beyond the single summary comment in step 6. No description rewrite, no label change, no status change.
 - Sub-tasks inherit the parent's project — do not pass a different `project.key`.
-- Never apply `ready-for-agent` to HITL slices — that label means "an AFK agent can grab this", and an agent grabbing a HITL slice will get stuck or do the wrong thing.
+- Always apply `ready-for-agent` (or the project's configured equivalent) to every sub-task in the create call — labels do NOT inherit from the parent in Jira, so a missing `labels` parameter results in an unlabelled sub-task that won't show up in agent pickup queries or label-filtered dashboards.
+- Always express slice dependencies as real Jira issue links of type `Blocks` — never as comments. The mapping is fixed: the key from `Blocked by:` is the BLOCKER → `outwardIssue.key`; this slice is the BLOCKED → `inwardIssue.key`. Do not invert. After creation, the Jira UI's link panel on the blocked slice must read *"is blocked by <blocker>"*. See `docs/agents/issue-tracker.md` for the worked example, sanity-check snippet, and PowerShell pitfalls.
 - Verify the sub-task issue type name (`Sub-task` vs `Subtask`) for the parent's project before the first create call; ask the user if neither matches.
 - Never hardcode `$JIRA_EMAIL`, `$JIRA_PAT`, or `$JIRA_URL` — always environment variables
 - If the project key is ambiguous (WSCR vs DT), ask before creating
